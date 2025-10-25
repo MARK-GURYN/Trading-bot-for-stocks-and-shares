@@ -1,0 +1,107 @@
+import asyncio
+import threading
+from selenium import webdriver
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+TELEGRAM_BOT_TOKEN = "8237898413:AAFmFmK-3hYbYBBKaSV3oDhoVu3i6avto3o"
+
+# ------------------- Selenium -------------------
+def start_browser():
+    edge_options = Options()
+    edge_options.add_argument("--start-maximized")
+    driver = webdriver.Edge(service=Service(EdgeChromiumDriverManager().install()), options=edge_options)
+    driver.get("https://www.trading212.com/en/login")
+    print("Opened Trading 212 login page.")
+    print("Waiting 40 seconds for login...")
+    driver.implicitly_wait(40)
+    return driver
+
+def open_stock(ticker):
+    url = f"https://www.trading212.com/en/invest/stocks/{ticker}"
+    driver.get(url)
+
+def place_order(order_type, amount):
+    try:
+        wait = WebDriverWait(driver, 15)
+        # Click Buy or Sell
+        button = wait.until(EC.element_to_be_clickable((By.XPATH, f"//button[contains(text(), '{order_type}')]")))
+        button.click()
+        # Enter amount
+        qty_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='number']")))
+        qty_field.clear()
+        qty_field.send_keys(str(amount))
+        # Confirm trade
+        confirm_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Send')]")))
+        confirm_button.click()
+        print(f"{order_type} order for {amount} placed.")
+        return True
+    except Exception as e:
+        print(f"Order failed: {e}")
+        return False
+
+# ------------------- Telegram Commands -------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is running! Use /search <ticker> or /buy <ticker> <amount> or /sell <ticker> <amount>.")
+
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Please provide a ticker, e.g. /search AAPL")
+        return
+    ticker = context.args[0].upper()
+    open_stock(ticker)
+    await update.message.reply_text(f"Opened {ticker} stock page in Edge browser.")
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /buy <ticker> <amount>")
+        return
+    ticker = context.args[0].upper()
+    amount = context.args[1]
+    open_stock(ticker)
+    success = place_order("Buy", amount)
+    if success:
+        await update.message.reply_text(f"✅ Buy order for {ticker} ({amount}) placed.")
+    else:
+        await update.message.reply_text(f"❌ Failed to place buy order for {ticker}.")
+
+async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 2:
+        await update.message.reply_text("Usage: /sell <ticker> <amount>")
+        return
+    ticker = context.args[0].upper()
+    amount = context.args[1]
+    open_stock(ticker)
+    success = place_order("Sell", amount)
+    if success:
+        await update.message.reply_text(f"✅ Sell order for {ticker} ({amount}) placed.")
+    else:
+        await update.message.reply_text(f"❌ Failed to place sell order for {ticker}.")
+
+# ------------------- Main -------------------
+async def main():
+    global driver
+    def browser_task():
+        global driver
+        driver = start_browser()
+    browser_thread = threading.Thread(target=browser_task, daemon=True)
+    browser_thread.start()
+
+    await asyncio.sleep(5)
+
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("search", search))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("sell", sell))
+    print("📱 Telegram bot running...")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
