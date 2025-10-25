@@ -10,7 +10,7 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TELEGRAM_BOT_TOKEN = "8237898413:AAFmFmK-3hYbYBBKaSV3oDhoVu3i6avto3o"
+TELEGRAM_BOT_TOKEN = "censord, go away :>"
 
 # ------------------- Selenium -------------------
 def start_browser():
